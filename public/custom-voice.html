@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>evermind Test Chat (ohne Branding)</title>
+  <style>
+    :root{ color-scheme: dark; }
+    body{
+      margin:0; background:#0f1115; color:#e9eef5;
+      font:16.5px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      min-height:100dvh; display:grid; place-items:center; padding:24px;
+    }
+    .card{
+      width:min(760px, 96vw);
+      background:#121826; border:1px solid #243; border-radius:16px;
+      padding:clamp(16px,4vw,24px); box-shadow:0 10px 30px rgba(0,0,0,.3);
+    }
+    h1{ margin:0 0 8px; font-size:clamp(22px,6vw,30px) }
+    p{ margin:.25rem 0 1rem; opacity:.9 }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+    button{
+      appearance:none; border:1px solid #2a3244; background:#1a2030;
+      color:#fff; border-radius:12px; padding:12px 16px; font-weight:700; cursor:pointer;
+    }
+    button:disabled{ opacity:.6; cursor:not-allowed }
+    .status{ margin-left:6px; opacity:.8 }
+    audio{ width:100%; margin-top:12px; background:#0b0f1a; border-radius:12px }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>evermind Test Chat</h1>
+    <p>Klicke auf <b>Start</b>, erlaube den Mikrofon-Zugriff und sprich normal. Der Assistent antwortet mit Stimme.</p>
+
+    <div class="row">
+      <button id="start">🎤 Start</button>
+      <button id="stop" disabled>■ Stop</button>
+      <span class="status" id="status">bereit</span>
+    </div>
+
+    <!-- Der eingehende Audio-Stream des Agents -->
+    <audio id="remote" controls playsinline></audio>
+  </main>
+
+  <script>
+  (function(){
+    const AGENT_ID = "agent_2701k4dev72vff187cxwxqd2je9p"; // deine Agent-ID
+    const START_URL = `https://api.elevenlabs.io/v1/convai/conversations/webrtc?agent_id=${encodeURIComponent(AGENT_ID)}`;
+    // Für PRIVATE Agents bräuchtest du einen Bearer-Token (siehe Hinweise unten).
+
+    const startBtn = document.getElementById('start');
+    const stopBtn  = document.getElementById('stop');
+    const statusEl = document.getElementById('status');
+    const remoteEl = document.getElementById('remote');
+
+    let pc = null;
+    let micStream = null;
+
+    function setStatus(s){ statusEl.textContent = s; }
+
+    async function startCall(){
+      try{
+        startBtn.disabled = true;
+        setStatus("verbinde …");
+
+        // 1) PeerConnection anlegen
+        pc = new RTCPeerConnection();
+
+        // 2) Remote-Audio entgegennehmen
+        pc.ontrack = (ev) => {
+          remoteEl.srcObject = ev.streams[0];
+          remoteEl.play().catch(()=>{});
+        };
+
+        // 3) Mikrofon freigeben & senden
+        micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+        pc.addTrack(micStream.getTracks()[0], micStream);
+
+        // 4) Audio vom Agent empfangen
+        pc.addTransceiver("audio", { direction:"recvonly" });
+
+        // 5) Offer erzeugen
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        // 6) Offer an ElevenLabs WebRTC-Endpoint schicken
+        const headers = { "Content-Type":"application/sdp" };
+        // Wenn dein Agent PRIVAT ist: headers["Authorization"] = `Bearer ${TOKEN}`;
+        const r = await fetch(START_URL, { method:"POST", headers, body: offer.sdp });
+
+        if(!r.ok){
+          const t = await r.text();
+          throw new Error(t || "webrtc start failed");
+        }
+        const answerSdp = await r.text();
+        await pc.setRemoteDescription({ type:"answer", sdp: answerSdp });
+
+        setStatus("verbunden – bitte sprechen 🎙️");
+        stopBtn.disabled = false;
+      }catch(err){
+        console.error(err);
+        setStatus("Fehler: " + (err?.message || err));
+        startBtn.disabled = false;
+        cleanup();
+        alert("Start fehlgeschlagen: " + (err?.message || err));
+      }
+    }
+
+    function cleanup(){
+      if(pc){ pc.close(); pc = null; }
+      if(micStream){
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+      stopBtn.disabled = true;
+      startBtn.disabled = false;
+      setStatus("bereit");
+    }
+
+    startBtn.addEventListener('click', startCall);
+    stopBtn.addEventListener('click', cleanup);
+    window.addEventListener('beforeunload', cleanup);
+  })();
+  </script>
+</body>
+</html>
