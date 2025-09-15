@@ -1,69 +1,43 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>evermind Test Chat</title>
   <style>
-    /* Reset */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
     body {
-      font-family: Arial, sans-serif;
-      background: #f9fafb;
-      color: #111;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
+      font-family: system-ui, sans-serif;
+      margin: 0; padding: 2rem;
       text-align: center;
-      padding: 1rem;
+      background: #f9f9f9;
     }
-
-    h1 {
-      font-size: 2.2rem;
-      margin-bottom: 1rem;
+    h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+    button {
+      margin-top: 2rem;
+      padding: 1rem 2rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      background: black;
+      color: white;
+      cursor: pointer;
     }
-
-    p {
-      font-size: 1.1rem;
-      max-width: 600px;
-      margin-bottom: 2rem;
-      color: #444;
-    }
-
-    .chat {
-      width: 100%;
-      max-width: 420px;
-    }
-
-    /* Mobile first: große Elemente, einfache Bedienung */
-    @media (min-width: 768px) {
-      h1 {
-        font-size: 2.8rem;
-      }
-      p {
-        font-size: 1.2rem;
-      }
-    }
+    button:hover { background: #333; }
   </style>
 </head>
 <body>
   <h1>evermind Test Chat</h1>
-  <p>Klicke unten auf das Mikrofon, erlaube den Zugriff und starte den Test-Chat.</p>
-  
-  <div class="chat">
-    <elevenlabs-convai
-      agent-id="agent_2701k4dev72vff187cxwxqd2je9p"
-      theme="light">
-    </elevenlabs-convai>
-  </div>
+  <p>Klicke unten, erlaube Mikrofonzugriff und starte den Test-Chat.</p>
+  <button id="startBtn">🎤 Start Chat</button>
 
-  <script src="https://elevenlabs.io/convai-widget/index.js"></script>
+  <script>
+    const btn = document.getElementById("startBtn");
+
+    btn.onclick = async () => {
+      alert("Hier würdest du die Verbindung zur ElevenLabs API starten.");
+      // TODO: WebRTC oder WebSocket zur ElevenLabs Realtime API aufbauen
+      // siehe: https://elevenlabs.io/docs/api-reference/realtime
+    };
+  </script>
 </body>
 </html>
