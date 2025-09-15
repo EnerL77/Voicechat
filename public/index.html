@@ -1,43 +1,133 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>evermind Test Chat</title>
   <style>
-    body {
-      font-family: system-ui, sans-serif;
-      margin: 0; padding: 2rem;
-      text-align: center;
-      background: #f9f9f9;
+    :root{ color-scheme: light dark; }
+    *{ box-sizing: border-box; }
+    body{
+      margin:0; min-height:100dvh; display:grid; place-items:center;
+      font:16.5px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Arial;
+      background:#f7f8fa; color:#111;
+      padding:24px;
     }
-    h1 { font-size: 2rem; margin-bottom: 0.5rem; }
-    button {
-      margin-top: 2rem;
-      padding: 1rem 2rem;
-      font-size: 1rem;
-      border: none;
-      border-radius: 8px;
-      background: black;
-      color: white;
-      cursor: pointer;
+    .card{
+      width:min(720px, 96vw); background:#fff; color:#111;
+      border:1px solid #e5e7eb; border-radius:16px; padding:clamp(16px,4vw,28px);
+      box-shadow:0 8px 30px rgba(0,0,0,.08);
     }
-    button:hover { background: #333; }
+    h1{ margin:0 0 6px; font-size:clamp(22px,6vw,32px); letter-spacing:.2px; text-align:center; }
+    p.desc{ margin:0 0 16px; text-align:center; color:#555; }
+    .row{ display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:10px; }
+    button{
+      appearance:none; border:none; border-radius:14px; cursor:pointer;
+      padding:14px 18px; font-weight:800; letter-spacing:.2px;
+      background:#111; color:#fff;
+    }
+    button.secondary{ background:#e7e7e7; color:#111; }
+    button:disabled{ opacity:.6; cursor:not-allowed; }
+    .status{ text-align:center; margin-top:10px; color:#444; }
+    audio{ display:block; width:100%; margin-top:10px; }
+    @media (prefers-color-scheme: dark){
+      body{ background:#0f1115; color:#e9eef5; }
+      .card{ background:#121826; color:#e9eef5; border-color:#243; }
+      p.desc{ color:#b7c0cc; }
+      button.secondary{ background:#2a3244; color:#fff; }
+    }
   </style>
 </head>
 <body>
-  <h1>evermind Test Chat</h1>
-  <p>Klicke unten, erlaube Mikrofonzugriff und starte den Test-Chat.</p>
-  <button id="startBtn">🎤 Start Chat</button>
+  <main class="card">
+    <h1>evermind Test Chat</h1>
+    <p class="desc">Klicke auf <b>Start</b>, erlaube den Mikrofon-Zugriff und sprich normal. Der Assistent antwortet mit Stimme.</p>
+
+    <div class="row">
+      <button id="start">🎤 Start</button>
+      <button id="stop" class="secondary" disabled>■ Stop</button>
+    </div>
+    <div class="status" id="status">Bereit</div>
+
+    <!-- Hier spielt die Gegenstimme des Agents -->
+    <audio id="remote" controls playsinline></audio>
+  </main>
 
   <script>
-    const btn = document.getElementById("startBtn");
+  (function(){
+    // Deine Agent-ID (Public Agent erforderlich; bei Private siehe Hinweis unten)
+    const AGENT_ID = "agent_2701k4dev72vff187cxwxqd2je9p";
+    const ELEVEN_WERTC_URL = `https://api.elevenlabs.io/v1/convai/conversations/webrtc?agent_id=${encodeURIComponent(AGENT_ID)}`;
 
-    btn.onclick = async () => {
-      alert("Hier würdest du die Verbindung zur ElevenLabs API starten.");
-      // TODO: WebRTC oder WebSocket zur ElevenLabs Realtime API aufbauen
-      // siehe: https://elevenlabs.io/docs/api-reference/realtime
-    };
+    const startBtn = document.getElementById("start");
+    const stopBtn  = document.getElementById("stop");
+    const statusEl = document.getElementById("status");
+    const remoteEl = document.getElementById("remote");
+
+    let pc = null;
+    let micStream = null;
+
+    function setStatus(t){ statusEl.textContent = t; }
+
+    async function startCall(){
+      try{
+        startBtn.disabled = true;
+        setStatus("Verbinden …");
+
+        // 1) RTCPeerConnection
+        pc = new RTCPeerConnection();
+
+        // 2) Remote-Audio des Agents anhängen
+        pc.ontrack = (ev) => {
+          if (!remoteEl.srcObject) remoteEl.srcObject = ev.streams[0];
+          remoteEl.play().catch(()=>{});
+        };
+
+        // 3) Mikro anfordern & senden
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        pc.addTrack(micStream.getTracks()[0], micStream);
+
+        // 4) Agent-Audio empfangen
+        pc.addTransceiver("audio", { direction: "recvonly" });
+
+        // 5) Offer erzeugen
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        // 6) Offer an ElevenLabs WebRTC-Endpoint
+        const headers = { "Content-Type": "application/sdp" };
+        // WICHTIG bei PRIVATE Agents:
+        // headers["Authorization"] = `Bearer ${TOKEN}`; // Conversation-Token vom eigenen Server
+
+        const r = await fetch(ELEVEN_WERTC_URL, { method: "POST", headers, body: offer.sdp });
+        if(!r.ok) throw new Error(await r.text() || "WebRTC start failed");
+
+        const answerSdp = await r.text();
+        await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+
+        setStatus("Verbunden – bitte sprechen 🎙️");
+        stopBtn.disabled = false;
+      } catch (err){
+        console.error(err);
+        setStatus("Fehler: " + (err?.message || err));
+        startBtn.disabled = false;
+        cleanup();
+        alert("Start fehlgeschlagen:\n" + (err?.message || err));
+      }
+    }
+
+    function cleanup(){
+      if (pc){ pc.close(); pc = null; }
+      if (micStream){ micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+      stopBtn.disabled = true;
+      startBtn.disabled = false;
+      setStatus("Bereit");
+    }
+
+    startBtn.addEventListener("click", startCall);
+    stopBtn.addEventListener("click", cleanup);
+    window.addEventListener("beforeunload", cleanup);
+  })();
   </script>
 </body>
 </html>
