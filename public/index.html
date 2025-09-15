@@ -10,22 +10,16 @@
     body{
       margin:0; min-height:100dvh; display:grid; place-items:center;
       font:16.5px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Arial;
-      background:#f7f8fa; color:#111;
-      padding:24px;
+      background:#f7f8fa; color:#111; padding:24px;
     }
-    .card{
-      width:min(720px, 96vw); background:#fff; color:#111;
+    .card{ width:min(720px, 96vw); background:#fff; color:#111;
       border:1px solid #e5e7eb; border-radius:16px; padding:clamp(16px,4vw,28px);
-      box-shadow:0 8px 30px rgba(0,0,0,.08);
-    }
-    h1{ margin:0 0 6px; font-size:clamp(22px,6vw,32px); letter-spacing:.2px; text-align:center; }
+      box-shadow:0 8px 30px rgba(0,0,0,.08); }
+    h1{ margin:0 0 6px; font-size:clamp(22px,6vw,32px); text-align:center; }
     p.desc{ margin:0 0 16px; text-align:center; color:#555; }
     .row{ display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:10px; }
-    button{
-      appearance:none; border:none; border-radius:14px; cursor:pointer;
-      padding:14px 18px; font-weight:800; letter-spacing:.2px;
-      background:#111; color:#fff;
-    }
+    button{ appearance:none; border:none; border-radius:14px; cursor:pointer;
+      padding:14px 18px; font-weight:800; letter-spacing:.2px; background:#111; color:#fff; }
     button.secondary{ background:#e7e7e7; color:#111; }
     button:disabled{ opacity:.6; cursor:not-allowed; }
     .status{ text-align:center; margin-top:10px; color:#444; }
@@ -48,16 +42,13 @@
       <button id="stop" class="secondary" disabled>■ Stop</button>
     </div>
     <div class="status" id="status">Bereit</div>
-
-    <!-- Hier spielt die Gegenstimme des Agents -->
     <audio id="remote" controls playsinline></audio>
   </main>
 
   <script>
   (function(){
-    // Deine Agent-ID (Public Agent erforderlich; bei Private siehe Hinweis unten)
     const AGENT_ID = "agent_2701k4dev72vff187cxwxqd2je9p";
-    const ELEVEN_WERTC_URL = `https://api.elevenlabs.io/v1/convai/conversations/webrtc?agent_id=${encodeURIComponent(AGENT_ID)}`;
+    const PROXY_URL = `/api/eleven/webrtc?agent_id=${encodeURIComponent(AGENT_ID)}`;
 
     const startBtn = document.getElementById("start");
     const stopBtn  = document.getElementById("stop");
@@ -74,32 +65,26 @@
         startBtn.disabled = true;
         setStatus("Verbinden …");
 
-        // 1) RTCPeerConnection
         pc = new RTCPeerConnection();
 
-        // 2) Remote-Audio des Agents anhängen
         pc.ontrack = (ev) => {
           if (!remoteEl.srcObject) remoteEl.srcObject = ev.streams[0];
           remoteEl.play().catch(()=>{});
         };
 
-        // 3) Mikro anfordern & senden
         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         pc.addTrack(micStream.getTracks()[0], micStream);
-
-        // 4) Agent-Audio empfangen
         pc.addTransceiver("audio", { direction: "recvonly" });
 
-        // 5) Offer erzeugen
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // 6) Offer an ElevenLabs WebRTC-Endpoint
-        const headers = { "Content-Type": "application/sdp" };
-        // WICHTIG bei PRIVATE Agents:
-        // headers["Authorization"] = `Bearer ${TOKEN}`; // Conversation-Token vom eigenen Server
+        const r = await fetch(PROXY_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/sdp" },
+          body: offer.sdp
+        });
 
-        const r = await fetch(ELEVEN_WERTC_URL, { method: "POST", headers, body: offer.sdp });
         if(!r.ok) throw new Error(await r.text() || "WebRTC start failed");
 
         const answerSdp = await r.text();
