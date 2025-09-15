@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>evermind Test Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 2rem;
+      text-align: center;
+      background: #f9fafb;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+    }
+    p {
+      max-width: 600px;
+      margin: 0 auto 2rem;
+      color: #444;
+    }
+    .chat {
+      max-width: 400px;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>evermind Test Chat</h1>
+  <p>Klicke auf das Mikrofon unten, erlaube Zugriff und starte den Test-Chat.</p>
+  
+  <div class="chat">
+    <elevenlabs-convai
+      agent-id="agent_2701k4dev72vff187cxwxqd2je9p"
+      theme="light">
+    </elevenlabs-convai>
+  </div>
+
+  <script src="https://elevenlabs.io/convai-widget/index.js"></script>
+</body>
+</html>
