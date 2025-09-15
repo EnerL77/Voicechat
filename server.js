@@ -5,49 +5,62 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+
+// 1) CORS (optional) & Static
 app.use(cors());
+const PUBLIC_DIR = path.join(__dirname, "public");
+app.use(express.static(PUBLIC_DIR));
 
-// Für SDP als reinen Text (Offer) – genau das erwartet ElevenLabs
+// 2) Healthcheck (für Render Settings → Health)
+app.get("/healthz", (req, res) => res.status(200).send("ok"));
+
+// 3) ElevenLabs WebRTC Proxy
 app.use("/api/eleven/webrtc", express.text({ type: "application/sdp", limit: "5mb" }));
-
-// Statische Dateien (dein Frontend)
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-app.use(express.static(path.join(__dirname, "public"))); // wenn dein Frontend unter /public liegt
-
-// Proxy-Route: Browser -> (du) -> ElevenLabs -> (du) -> Browser
-const ELEVEN_WERTC_URL = "https://api.elevenlabs.io/v1/convai/conversations/webrtc";
-
-/**
- * POST /api/eleven/webrtc?agent_id=....
- * Body: SDP-Offer (Content-Type: application/sdp)
- */
 app.post("/api/eleven/webrtc", async (req, res) => {
   try {
-    const { agent_id } = req.query;
-    if (!agent_id) return res.status(400).send("agent_id missing");
+    const agentId = req.query.agent_id;
+    if (!agentId) return res.status(400).send("agent_id missing");
 
-    const headers = { "Content-Type": "application/sdp" };
+    const upstream = await fetch(
+      `https://api.elevenlabs.io/v1/convai/conversations/webrtc?agent_id=${encodeURIComponent(agentId)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/sdp" },
+        body: req.body
+      }
+    );
 
-    // Falls dein Agent PRIVAT ist, hier dein Conversation-Token hinzufügen:
-    // headers.Authorization = `Bearer ${process.env.ELEVEN_CONV_TOKEN}`;
-
-    const r = await fetch(`${ELEVEN_WERTC_URL}?agent_id=${encodeURIComponent(agent_id)}`, {
-      method: "POST",
-      headers,
-      body: req.body
-    });
-
-    const answer = await r.text(); // ElevenLabs liefert die SDP-Answer im Body zurück
-    res.status(r.status).set("Content-Type", "application/sdp").send(answer);
+    const answer = await upstream.text();
+    res.status(upstream.status).set("Content-Type", "application/sdp").send(answer);
   } catch (e) {
-    console.error(e);
+    console.error("Proxy error:", e);
     res.status(500).send(String(e));
   }
 });
 
-// Fallback auf index.html (optional)
+// 4) Root & Fallback – mit sauberem Fehlerhandling
+app.get("/", (req, res) => {
+  const idx = path.join(PUBLIC_DIR, "index.html");
+  res.sendFile(idx, (err) => {
+    if (err) {
+      console.error("sendFile / index.html error:", err);
+      res
+        .status(500)
+        .send("index.html not found under /public. Please add public/index.html");
+    }
+  });
+});
+
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  const idx = path.join(PUBLIC_DIR, "index.html");
+  res.sendFile(idx, (err) => {
+    if (err) {
+      console.error("Fallback sendFile error:", err);
+      res.status(404).send("Not Found");
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3000;
